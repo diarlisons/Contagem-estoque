@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assistente de Voz - Controle de Estoque</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 100%);
+      color: #e0e0e0;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px 0;
+      font-size: 1.5rem;
+      color: #ffffff;
+      text-align: center;
+    }
+
+    .subtitle {
+      color: #8888a8;
+      font-size: 0.95rem;
+      margin-bottom: 32px;
+      text-align: center;
+    }
+
+    .status {
+      min-height: 24px;
+      color: #00d4ff;
+      font-weight: 500;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .mic-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .mic-button {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(145deg, #2a2a3d, #1e1e2f);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      position: relative;
+    }
+
+    .mic-button:active,
+    .mic-button.listening {
+      transform: scale(0.96);
+      box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.7);
+      animation: pulse 1.2s infinite;
+    }
+
+    .mic-button svg {
+      width: 56px;
+      height: 56px;
+      fill: currentColor;
+    }
+
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.7);
+      }
+      70% {
+        box-shadow: 0 0 0 24px rgba(0, 212, 255, 0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(0, 212, 255, 0);
+      }
+    }
+
+    .button-label {
+      color: #b0b0c8;
+      font-size: 1rem;
+      text-align: center;
+    }
+
+    .result-card {
+      width: 100%;
+      max-width: 480px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 20px;
+      margin-top: 24px;
+    }
+
+    .result-card h2 {
+      margin: 0 0 12px 0;
+      font-size: 1.1rem;
+      color: #ffffff;
+    }
+
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .result-row:last-child {
+      border-bottom: none;
+    }
+
+    .result-label {
+      color: #8888a8;
+    }
+
+    .result-value {
+      color: #00d4ff;
+      font-weight: 600;
+    }
+
+    .log {
+      width: 100%;
+      max-width: 480px;
+      margin-top: 24px;
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 12px;
+      font-size: 0.85rem;
+      color: #a0a0b8;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+
+    .log-entry {
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+
+    .log-entry.success {
+      color: #4ade80;
+    }
+
+    .log-entry.error {
+      color: #f87171;
+    }
+
+    .apps-script-url-comment {
+      width: 100%;
+      max-width: 480px;
+      margin-top: 24px;
+      padding: 16px;
+      border-left: 4px solid #f59e0b;
+      background: rgba(245, 158, 11, 0.1);
+      border-radius: 8px;
+      color: #fcd34d;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .apps-script-url-comment code {
+      background: rgba(0, 0, 0, 0.4);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', Courier, monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Assistente de Voz</h1>
+  <p class="subtitle">Segure o botão para falar e registrar o produto</p>
+
+  <div class="status" id="status">Toque e segure o microfone para começar</div>
+
+  <div class="mic-container">
+    <button
+      id="micBtn"
+      class="mic-button"
+      aria-label="Segurar para falar"
+      onmousedown="startListening()"
+      onmouseup="stopListening()"
+      onmouseleave="stopListening()"
+      ontouchstart="startListening(event)"
+      ontouchend="stopListening(event)"
+      ontouchcancel="stopListening(event)"
+    >
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+      </svg>
+    </button>
+    <div class="button-label">Segurar para Falar</div>
+  </div>
+
+  <div class="result-card" id="resultCard" style="display: none;">
+    <h2>Último registro</h2>
+    <div class="result-row">
+      <span class="result-label">Fala reconhecida:</span>
+      <span class="result-value" id="txtTranscricao">-</span>
+    </div>
+    <div class="result-row">
+      <span class="result-label">Quantidade:</span>
+      <span class="result-value" id="txtQuantidade">-</span>
+    </div>
+    <div class="result-row">
+      <span class="result-label">Produto:</span>
+      <span class="result-value" id="txtProduto">-</span>
+    </div>
+    <div class="result-row">
+      <span class="result-label">Categoria:</span>
+      <span class="result-value" id="txtCategoria">-</span>
+    </div>
+  </div>
+
+  <div class="log" id="log">
+    <strong>Registro de eventos:</strong>
+  </div>
+
+  <div class="apps-script-url-comment">
+    <strong>⚠️ Atenção:</strong> Antes de usar, substitua a URL de envio abaixo pela URL do seu Web App do Google Apps Script.<br>
+    No código JavaScript, localize a constante <code>URL_APPS_SCRIPT</code> e cole o link do seu Apps Script entre as aspas.
+  </div>
+
+  <script>
+    // ============================================================
+    // CONFIGURAÇÃO OBRIGATÓRIA DO USUÁRIO
+    // ============================================================
+    // ⚠️ SUBSTITUA A URL ABAIXO PELA URL DO SEU GOOGLE APPS SCRIPT ⚠️
+    const URL_APPS_SCRIPT = 'https://script.google.com/macros/s/AKfycby_51jIAJRUDe4GN3hej693b7WeOUtfASisQtD5b4YKJPZOFbm4GqClrxiSdQF8dmzI/exec';
+    // ============================================================
+
+    const MAPA_CATEGORIAS = {
+      softs: ['coca', 'coca-cola', 'coca cola', 'pepsi', 'guaraná', 'guarana', 'fanta', 'sprite', 'sukita', 'schweppes', 'tonica', 'tônica', 'água tônica', 'agua tonica', 'refrigerante', 'refri', 'soda', 'limonada', 'mate', 'ice tea', 'cha gelado', 'chá gelado', 'energético', 'energetico', 'red bull', 'monster', 'isotonico', 'isotônico', 'powerade', 'gatorade', 'suco', 'sucos', 'del valle', 'tampico', 'do bem', 'campo largo', 'dafruta', 'dafruta', 'fresh'],
+      cervejas: ['cerveja', 'heineken', 'budweiser', 'brahma', 'skol', 'antarctica', 'itaipava', 'stella', 'corona', 'amstel', 'pilsen', 'lager', 'pilsner', 'ipa', 'weiss', 'weizen', 'bock', 'stout', 'porter', 'litrão', 'litrao', 'long neck', 'longneck', 'garrafa', 'lata', 'chopp', 'subzero', 'sub zero', 'zero', 'origem', 'beck', 'serra malte', 'spaten', 'krug', 'eisenbahn', 'baden baden', 'devassa', 'colorado', 'schin', 'nova schin', 'bohemia', 'glacial', 'kaiser', 'petra', 'einstein'],
+      saques: ['saque', 'sakê', 'sake', 'saque', 'japonês', 'japones', 'licor', 'licores', 'umeshu', 'shochu', 'soju', 'vinagre'],
+      'bebidas destiladas': ['vodka', 'smirnoff', 'absolut', 'finlandia', 'ciroc', 'grey goose', 'whisky', 'whiskey', 'bourbon', 'jack daniels', 'johnnie walker', 'red label', 'black label', 'ballantines', 'chivas', 'old parr', 'buchanans', 'passport', 'white horse', 'teachers', 'dewars', 'jameson', 'turkey', 'old times', 'conhaque', 'cognac', 'hennessy', 'remy martin', 'martell', ' Courvoisier', 'brandy', 'gin', 'gordons', 'tanqueray', 'bombay', 'beefeater', 'seagers', 'rum', 'ron', 'bacardi', 'havana', 'malibu', 'cachaça', 'cachaca', 'pitu', '51', 'velho barreiro', 'ypioca', 'leblon', 'seleta', 'jurupinga', 'caninha', 'aguardente', 'fireball', 'jagermeister', 'tequila', 'jose cuervo', 'sauza', 'patron', 'mezcal', 'absinto', 'absinthe'],
+      vinhos: ['vinho', 'tinto', 'branco', 'rose', 'rosé', 'seco', 'suave', 'doce', 'garrafa de vinho', 'cabernet', 'merlot', 'malbec', 'syrah', 'shiraz', 'pinot noir', 'sauvignon blanc', 'chardonnay', 'riesling', 'moscatel', 'espumante', 'champagne', 'champanhe', 'prosecco', 'cava', 'frisante', 'lambrusco', 'brut', 'demi-sec', 'demi sec', 'doce', 'nacional', 'importado', 'chile', 'argentina', 'portugal', 'espanha', 'frança', 'italia'],
+      espumantes: ['espumante', 'champagne', 'champanhe', 'prosecco', 'cava', 'frisante', 'lambrusco', 'brut', 'demi-sec', 'demi sec', 'doce', 'moscatel', 'astica', 'chandon', 'freixenet', 'salton', 'casa valduga', 'veuve clicquot', 'moët', 'moet', 'dom perignon', 'krug'],
+      hortifruti: ['fruta', 'frutas', 'laranja', 'banana', 'maçã', 'maca', 'uva', 'mamão', 'mamao', 'melancia', 'melão', 'melao', 'abacaxi', 'morango', 'kiwi', 'pêra', 'pera', 'goiaba', 'manga', 'maracujá', 'maracuja', 'limão', 'limao', 'tangerina', 'bergamota', 'caqui', 'ameixa', 'pêssego', 'pessego', 'figo', 'coco', 'abacate', 'tomate', 'cenoura', 'batata', 'cebola', 'alho', 'alface', 'repolho', 'couve', 'brócolis', 'brocolis', 'espinafre', 'rúcula', 'rucula', 'agrião', 'agrao', 'pepino', 'pimentão', 'pimentao', 'abobrinha', 'berinjela', 'mandioca', 'aipim', 'macaxeira', 'inhame', 'cará', 'bara', 'quiabo', 'vagem', 'ervilha', 'milho', 'milho verde', 'hortifruti', 'verdura', 'legume', 'tempero', 'salsa', 'coentro', 'manjericão', 'manjerona', 'orégano', 'oregano', 'alecrim', 'tomilho', 'hortelã', 'hortela', 'cebolinha'],
+      congelados: ['congelado', 'congelados', 'sorvete', 'picolé', 'picoles', 'paleta', 'massa', 'massas', 'lasanha', 'pizza', 'pão de queijo', 'pao de queijo', 'hamburguer', 'hambúrguer', 'hamburger', 'nuggets', 'batata frita', 'batata congelada', 'polenta', 'mandioca congelada', 'legumes congelados', 'frango congelado', 'carne congelada', 'peixe congelado', 'prato pronto', 'pratos prontos', 'refeição', 'refeicoes', 'salgado congelado', 'salgados', 'coxinha', 'risoles', 'kibe', 'esfira', 'folhado', 'empada', 'sfiha', 'salgadinho', 'congelada', 'sorveteria', 'gelato'],
+      'produtos de limpeza': ['limpeza', 'detergente', 'sabão', 'sabao', 'sabonete', 'desinfetante', 'limpador', 'multiuso', 'cloro', 'água sanitária', 'agua sanitaria', 'amaciante', 'sabão em pó', 'sabao em po', 'lava roupas', 'tira manchas', 'limpador de piso', 'cera', 'lustra móveis', 'lustra moveis', 'alcool', 'álcool', 'pano', 'papel toalha', 'papel higiênico', 'papel higienico', 'guardanapo', 'saco de lixo', 'sacos de lixo', 'esponja', 'escova', 'vassoura', 'rodo', 'pá', 'pa', 'balde', 'mop', 'paninho', 'luvas', 'luva', 'máscara', 'mascara', 'desodorizador', 'aerosol', 'inseticida', 'veneno', 'ratoeira', 'armadilha', 'limpa vidros', 'limpador de vidro', 'tira limo', 'removedor', 'desengordurante', 'sanitário', 'sanitario', 'pedra sanitária', 'sabão líquido', 'sabao liquido', 'pasta de dente', 'escova de dente', 'fio dental', 'creme dental', 'shampoo', 'condicionador', 'creme de pentear', 'desodorante', 'perfume', 'colônia', 'colonia', 'higiene', 'higienizador'],
+      embalagens: ['embalagem', 'embalagens', 'saco', 'sacos', 'sacola', 'sacolas', 'caixa', 'caixas', 'papelão', 'papelao', 'pote', 'potes', 'garrafa', 'garrafas', 'vidro', 'vidros', 'latinha', 'lata', 'latão', 'latao', 'copo', 'copos', 'prato descartável', 'prato descartavel', 'copo descartável', 'copo descartavel', 'guardanapo', 'toalha de mesa', 'papel manteiga', 'papel alumínio', 'papel aluminio', 'filme pvc', 'pvc', 'sacola plástica', 'sacola plastica', 'canudo', 'canudos', 'colher descartável', 'colher descartavel', 'garfo descartável', 'garfo descartavel', 'faca descartável', 'faca descartavel', 'papel', 'etiqueta', 'fita adesiva', 'fita', 'corda', 'elástico', 'elastico', 'lacre', 'tampa', 'tampas', 'rolha', 'rolhas', 'papel kraft', 'isopor', 'embalagem térmica', 'embalagem termica', 'delivery', 'ifood', 'rappi', 'uber eats', 'take away'],
+      'estoque secos': ['estoque seco', 'estoque secos', 'seco', 'secos', 'arroz', 'feijão', 'feijao', 'macarrão', 'macarrao', 'farinha', 'farinha de trigo', 'farinha de mandioca', 'farinha de milho', 'fubá', 'fuba', 'açúcar', 'acucar', 'sal', 'óleo', 'oleo', 'azeite', 'vinagre', 'molho', 'ketchup', 'mostarda', 'maionese', 'catchup', 'pimenta', 'tempero', 'temperos', 'café', 'cafe', 'café solúvel', 'cafe soluvel', 'achocolatado', 'leite em pó', 'leite condensado', 'creme de leite', 'leite de coco', 'coco ralado', 'fermento', 'fermento biológico', 'fermento seco', 'granola', 'aveia', 'cereal', 'muesli', 'sopa', 'sopas', 'caldo', 'caldo de galinha', 'sazon', 'knorr', 'biscoito', 'biscoitos', 'bolacha', 'bolachas', 'torrada', 'pão de forma', 'pao de forma', 'pão', 'pao', 'manteiga', 'margarina', 'requeijão', 'requeijao', 'queijo', 'presunto', 'mortadela', 'salame', 'salaminho', 'peito de peru', 'frango desfiado', 'atum', 'sardinha', 'sardinhas', 'milho enlatado', 'ervilha enlatada', 'seleta de legumes', 'palmito', 'azeitona', 'batata palha', 'batata chips', 'amendoim', 'castanha', 'nozes', 'passas', 'uvas passas', 'gelatina', 'pudim', 'flan', 'brigadeiro', 'doce de leite', 'goiabada', 'rapadura', 'mel', 'geleia', 'geléia', 'pasta de amendoim', 'leite', 'iogurte', 'queijo ralado', 'farofas', 'farofa', 'pipoca', 'óleo de soja', 'oleo de soja', 'margarina', 'manteiga de amendoim', 'chocolate', 'chocolates', 'bala', 'bombom', 'chiclete', 'pastilha', 'biscoito recheado', 'água', 'agua', 'água mineral', 'agua mineral', 'água com gás', 'agua com gas', 'soda', 'refrigerante', 'suco de caixa', 'suco em pó', 'suco em po']
+    };
+
+    const statusEl = document.getElementById('status');
+    const micBtn = document.getElementById('micBtn');
+    const resultCard = document.getElementById('resultCard');
+    const logEl = document.getElementById('log');
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    let isListening = false;
+    let finalTranscript = '';
+    let startHoldTime = 0;
+
+    function log(mensagem, tipo) {
+      const entry = document.createElement('div');
+      entry.className = 'log-entry' + (tipo ? ' ' + tipo : '');
+      entry.textContent = '[' + new Date().toLocaleTimeString('pt-BR') + '] ' + mensagem;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function initRecognition() {
+      if (!SpeechRecognition) {
+        statusEl.textContent = 'Reconhecimento de voz não suportado neste navegador.';
+        statusEl.style.color = '#f87171';
+        log('Reconhecimento de voz não suportado neste navegador.', 'error');
+        return false;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.lang = 'pt-BR';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = function () {
+        isListening = true;
+        micBtn.classList.add('listening');
+        statusEl.textContent = 'Ouvindo... fale o produto e a quantidade';
+        statusEl.style.color = '#00d4ff';
+      };
+
+      recognition.onresult = function (event) {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + ' ';
+          } else {
+            interim += transcript;
+          }
+        }
+        if (finalTranscript.trim() || interim.trim()) {
+          statusEl.textContent = 'Reconhecido: ' + (finalTranscript + interim).trim();
+        }
+      };
+
+      recognition.onerror = function (event) {
+        log('Erro no reconhecimento: ' + event.error, 'error');
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          statusEl.textContent = 'Permissão de microfone negada.';
+          statusEl.style.color = '#f87171';
+        } else if (event.error === 'no-speech') {
+          statusEl.textContent = 'Nenhuma fala detectada. Tente novamente.';
+        }
+      };
+
+      recognition.onend = function () {
+        isListening = false;
+        micBtn.classList.remove('listening');
+        statusEl.textContent = 'Toque e segure o microfone para começar';
+        statusEl.style.color = '#00d4ff';
+        if (finalTranscript.trim()) {
+          processarFala(finalTranscript.trim());
+          finalTranscript = '';
+        }
+      };
+
+      return true;
+    }
+
+    function startListening(event) {
+      if (event && event.cancelable) event.preventDefault();
+      if (isListening) return;
+      startHoldTime = Date.now();
+      if (!recognition) {
+        if (!initRecognition()) return;
+      }
+      finalTranscript = '';
+      try {
+        recognition.start();
+      } catch (err) {
+        log('Erro ao iniciar reconhecimento: ' + err.message, 'error');
+      }
+    }
+
+    function stopListening(event) {
+      if (event && event.cancelable) event.preventDefault();
+      if (!isListening || !recognition) return;
+      const holdTime = Date.now() - startHoldTime;
+      if (holdTime < 300) {
+        setTimeout(function () {
+          safeStop();
+        }, 300 - holdTime);
+      } else {
+        safeStop();
+      }
+    }
+
+    function safeStop() {
+      if (recognition && isListening) {
+        try {
+          recognition.stop();
+        } catch (err) {
+          log('Erro ao parar reconhecimento: ' + err.message, 'error');
+          isListening = false;
+          micBtn.classList.remove('listening');
+          if (finalTranscript.trim()) {
+            processarFala(finalTranscript.trim());
+            finalTranscript = '';
+          }
+        }
+      }
+    }
+
+    function numeroPorExtensoParaNumero(texto) {
+      const mapa = {
+        'zero': 0, 'um': 1, 'dois': 2, 'três': 3, 'tres': 3, 'quatro': 4,
+        'cinco': 5, 'seis': 6, 'sete': 7, 'oito': 8, 'nove': 9, 'dez': 10,
+        'onze': 11, 'doze': 12, 'treze': 13, 'quatorze': 14, 'catorze': 14,
+        'quinze': 15, 'dezesseis': 16, 'dezessete': 17, 'dezoito': 18, 'dezenove': 19,
+        'vinte': 20, 'trinta': 30, 'quarenta': 40, 'cinquenta': 50,
+        'sessenta': 60, 'setenta': 70, 'oitenta': 80, 'noventa': 90,
+        'cem': 100, 'duzentos': 200, 'trezentos': 300, 'quatrocentos': 400,
+        'quinhentos': 500, 'seiscentos': 600, 'setecentos': 700, 'oitocentos': 800, 'novecentos': 900
+      };
+      let normalizado = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      let encontrados = [];
+      let soma = 0;
+      let ultimoDezena = 0;
+
+      const partes = normalizado.split(/[\s\-e]+/);
+      for (const parte of partes) {
+        if (mapa[parte] !== undefined) {
+          const valor = mapa[parte];
+          if (valor < 10) {
+            if (soma > 0 && ultimoDezena > 0) {
+              soma = soma - ultimoDezena + ultimoDezena + valor;
+            } else if (soma > 0) {
+              soma += valor;
+            } else {
+              soma = valor;
+            }
+            ultimoDezena = 0;
+          } else if (valor < 100) {
+            ultimoDezena = valor;
+            soma += valor;
+          } else {
+            soma += valor;
+            ultimoDezena = 0;
+          }
+          encontrados.push(valor);
+        }
+      }
+      return encontrados.length > 0 ? soma : null;
+    }
+
+    function extrairQuantidade(texto) {
+      const limpo = texto
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/,/g, '.');
+
+      // 1. Tenta encontrar número escrito por extenso no início ou fim
+      const extensoInicio = limpo.match(/^(um|dois|tres|três|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos|novecentos)(?:\s+\w+)?/i);
+      const extensoFim = limpo.match(/(?:\s+)(um|dois|tres|três|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos|novecentos)$/i);
+
+      if (extensoInicio) {
+        const valor = numeroPorExtensoParaNumero(extensoInicio[0]);
+        if (valor !== null) return { valor: valor, posicao: 'inicio' };
+      }
+      if (extensoFim) {
+        const valor = numeroPorExtensoParaNumero(extensoFim[1]);
+        if (valor !== null) return { valor: valor, posicao: 'fim' };
+      }
+
+      // 2. Tenta encontrar dígito numérico no início ou fim
+      const matchNumerico = limpo.match(/(\d+(?:\.\d+)?)/g);
+      if (matchNumerico) {
+        const primeiraParte = limpo.match(/^(\d+(?:\.\d+)?)/);
+        const ultimaParte = limpo.match(/(\d+(?:\.\d+)?)$/);
+        if (ultimaParte) return { valor: parseFloat(ultimaParte[1]), posicao: 'fim' };
+        if (primeiraParte) return { valor: parseFloat(primeiraParte[1]), posicao: 'inicio' };
+      }
+
+      // 3. Tenta encontrar números como strings por extenso no meio
+      const extensoMeio = limpo.match(/\b(um|dois|tres|três|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos|novecentos)\b/i);
+      if (extensoMeio) {
+        const valor = numeroPorExtensoParaNumero(extensoMeio[1]);
+        if (valor !== null) return { valor: valor, posicao: 'meio' };
+      }
+
+      return { valor: null, posicao: null };
+    }
+
+    function normalizarProduto(texto, quantidade) {
+      let produto = texto
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+
+      // Remove o número numérico do início ou fim
+      produto = produto.replace(/^\d+(?:\.\d+)?\s*/, '');
+      produto = produto.replace(/\s*\d+(?:\.\d+)?$/, '');
+
+      // Remove números por extenso do início
+      produto = produto.replace(/^(um|dois|tres|três|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos|novecentos)(\s+(e\s+)?)?/i, '');
+
+      // Remove números por extenso do fim
+      produto = produto.replace(/(\s+(e\s+)?)?(um|dois|tres|três|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|duzentos|trezentos|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos|novecentos)$/i, '');
+
+      return produto.replace(/\s+/g, ' ').trim();
+    }
+
+    function detectarCategoria(nomeProduto) {
+      const produtoNormalizado = nomeProduto
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+      for (const categoria in MAPA_CATEGORIAS) {
+        if (MAPA_CATEGORIAS.hasOwnProperty(categoria)) {
+          const palavrasChave = MAPA_CATEGORIAS[categoria];
+          for (const palavra of palavrasChave) {
+            const palavraNormalizada = palavra
+              .toLowerCase()
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '');
+            if (produtoNormalizado.includes(palavraNormalizada)) {
+              return categoria;
+            }
+          }
+        }
+      }
+      return 'não categorizado';
+    }
+
+    function processarFala(texto) {
+      log('Fala reconhecida: "' + texto + '"');
+      const { valor: quantidade, posicao } = extrairQuantidade(texto);
+      const nomeProduto = normalizarProduto(texto, quantidade);
+      const categoria = detectarCategoria(nomeProduto);
+
+      document.getElementById('txtTranscricao').textContent = texto;
+      document.getElementById('txtQuantidade').textContent = quantidade !== null ? quantidade : 'Não identificada';
+      document.getElementById('txtProduto').textContent = nomeProduto || 'Não identificado';
+      document.getElementById('txtCategoria').textContent = categoria;
+      resultCard.style.display = 'block';
+
+      if (!quantidade || !nomeProduto) {
+        log('Não foi possível identificar produto e quantidade.', 'error');
+        return;
+      }
+
+      enviarParaPlanilha({
+        transcricao: texto,
+        quantidade: quantidade,
+        produto: nomeProduto,
+        categoria: categoria,
+        dataHora: new Date().toISOString()
+      });
+    }
+
+    function enviarParaPlanilha(dados) {
+      if (!URL_APPS_SCRIPT || URL_APPS_SCRIPT.includes('SEU_ID_AQUI')) {
+        log('URL do Google Apps Script não configurada. Substitua URL_APPS_SCRIPT no código.', 'error');
+        statusEl.textContent = 'Configure a URL do Apps Script no código.';
+        statusEl.style.color = '#f87171';
+        return;
+      }
+
+      statusEl.textContent = 'Enviando para planilha...';
+      statusEl.style.color = '#f59e0b';
+
+      fetch(URL_APPS_SCRIPT, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(dados)
+      })
+        .then(function () {
+          log('Dados enviados com sucesso: ' + dados.produto + ' (' + dados.quantidade + ') - ' + dados.categoria, 'success');
+          statusEl.textContent = 'Enviado: ' + dados.quantidade + 'x ' + dados.produto + ' [' + dados.categoria + ']';
+          statusEl.style.color = '#4ade80';
+        })
+        .catch(function (err) {
+          log('Erro ao enviar para planilha: ' + err.message, 'error');
+          statusEl.textContent = 'Erro ao enviar. Verifique a URL do Apps Script.';
+          statusEl.style.color = '#f87171';
+        });
+    }
+
+    // Inicializa o reconhecimento de forma lazy no primeiro uso
+    if (!SpeechRecognition) {
+      statusEl.textContent = 'Seu navegador não suporta reconhecimento de voz.';
+      statusEl.style.color = '#f87171';
+    }
+  </script>
+</body>
+</html>
